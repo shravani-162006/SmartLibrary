@@ -44,6 +44,9 @@ public class LibraryMapActivity extends AppCompatActivity implements OnMapReadyC
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
     private GoogleMap mMap;
     private DatabaseReference librariesRef;
+    
+    private java.util.Map<String, com.google.android.gms.maps.model.Marker> libraryMarkers = new java.util.HashMap<>();
+    private LatLng firstLibraryLatLng = null;
 
     private String name = "Central Smart Library";
     private String address = "100 Academic Way, Campus Center";
@@ -90,6 +93,21 @@ public class LibraryMapActivity extends AppCompatActivity implements OnMapReadyC
         } catch (Exception e) {
             e.printStackTrace();
         }
+        
+        mMap.setOnInfoWindowClickListener(marker -> {
+            LibraryLocation lib = (LibraryLocation) marker.getTag();
+            if (lib != null) {
+                Intent intent = new Intent(LibraryMapActivity.this, LibraryDetailsActivity.class);
+                intent.putExtra(LibraryDetailsActivity.EXTRA_LIBRARY_ID, lib.getId());
+                intent.putExtra(LibraryDetailsActivity.EXTRA_LIBRARY_NAME, lib.getName());
+                intent.putExtra(LibraryDetailsActivity.EXTRA_LIBRARY_ADDRESS, lib.getAddress());
+                intent.putExtra(LibraryDetailsActivity.EXTRA_LIBRARY_HOURS, lib.getOpeningHours());
+                intent.putExtra(LibraryDetailsActivity.EXTRA_LIBRARY_PHONE, lib.getPhone());
+                intent.putExtra(LibraryDetailsActivity.EXTRA_LIBRARY_LAT, lib.getLatitude());
+                intent.putExtra(LibraryDetailsActivity.EXTRA_LIBRARY_LNG, lib.getLongitude());
+                startActivity(intent);
+            }
+        });
     }
 
     private void addCityLibraries(GoogleMap map) {
@@ -98,19 +116,43 @@ public class LibraryMapActivity extends AppCompatActivity implements OnMapReadyC
             public void onChildAdded(@NonNull DataSnapshot snapshot, String previousChildName) {
                 LibraryLocation lib = snapshot.getValue(LibraryLocation.class);
                 if (lib != null) {
-                    map.addMarker(new MarkerOptions()
-                            .position(new LatLng(lib.getLatitude(), lib.getLongitude()))
+                    LatLng loc = new LatLng(lib.getLatitude(), lib.getLongitude());
+                    if (firstLibraryLatLng == null) {
+                        firstLibraryLatLng = loc;
+                    }
+                    com.google.android.gms.maps.model.Marker marker = map.addMarker(new MarkerOptions()
+                            .position(loc)
                             .title(lib.getName())
                             .snippet(lib.getAddress()));
+                    if (marker != null) {
+                        marker.setTag(lib);
+                        libraryMarkers.put(snapshot.getKey(), marker);
+                    }
                 }
             }
             @Override
             public void onChildChanged(@NonNull DataSnapshot snapshot, String previousChildName) {
-                // To properly update, we would clear and reload or keep marker references.
-                // For simplicity, we can just clear and fetch all again on change, or ignore for now.
+                LibraryLocation lib = snapshot.getValue(LibraryLocation.class);
+                if (lib != null && libraryMarkers.containsKey(snapshot.getKey())) {
+                    com.google.android.gms.maps.model.Marker marker = libraryMarkers.get(snapshot.getKey());
+                    if (marker != null) {
+                        marker.setPosition(new LatLng(lib.getLatitude(), lib.getLongitude()));
+                        marker.setTitle(lib.getName());
+                        marker.setSnippet(lib.getAddress());
+                        marker.setTag(lib);
+                    }
+                }
             }
             @Override
-            public void onChildRemoved(@NonNull DataSnapshot snapshot) {}
+            public void onChildRemoved(@NonNull DataSnapshot snapshot) {
+                if (libraryMarkers.containsKey(snapshot.getKey())) {
+                    com.google.android.gms.maps.model.Marker marker = libraryMarkers.get(snapshot.getKey());
+                    if (marker != null) {
+                        marker.remove();
+                    }
+                    libraryMarkers.remove(snapshot.getKey());
+                }
+            }
             @Override
             public void onChildMoved(@NonNull DataSnapshot snapshot, String previousChildName) {}
             @Override
@@ -129,9 +171,10 @@ public class LibraryMapActivity extends AppCompatActivity implements OnMapReadyC
                     LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
                     mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 12f));
                 } else {
-                    // Fallback to default city center
-                    LatLng defaultLatLng = new LatLng(18.5204, 73.8567);
-                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLatLng, 12f));
+                    // Fallback to first library
+                    if (firstLibraryLatLng != null) {
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(firstLibraryLatLng, 12f));
+                    }
                 }
             });
         } else {
@@ -146,9 +189,10 @@ public class LibraryMapActivity extends AppCompatActivity implements OnMapReadyC
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 enableUserLocation();
             } else {
-                Toast.makeText(this, "Location permission denied. Showing default city view.", Toast.LENGTH_LONG).show();
-                LatLng defaultLatLng = new LatLng(18.5204, 73.8567);
-                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLatLng, 12f));
+                Toast.makeText(this, "Location permission denied. Showing libraries.", Toast.LENGTH_LONG).show();
+                if (firstLibraryLatLng != null && mMap != null) {
+                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(firstLibraryLatLng, 12f));
+                }
             }
         }
     }

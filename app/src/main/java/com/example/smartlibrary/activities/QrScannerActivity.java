@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -122,6 +123,37 @@ public class QrScannerActivity extends AppCompatActivity {
             mDatabase.child("books").addListenerForSingleValueEvent(new ValueEventListener() {
                 @Override
                 public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    if (rawText.startsWith("SHELF_")) {
+                        // Handle Shelf QR
+                        Toast.makeText(QrScannerActivity.this, "Scanned Shelf: " + rawText, Toast.LENGTH_SHORT).show();
+                        android.content.Intent intent = new android.content.Intent(QrScannerActivity.this, MainActivity.class);
+                        intent.putExtra("EXTRA_SHELF_QUERY", rawText);
+                        startActivity(intent);
+                        finish();
+                        return;
+                    }
+                    
+                    if (rawText.startsWith("LIB_")) {
+                        // Handle Library Check-in QR
+                        Toast.makeText(QrScannerActivity.this, "Checked into Library!", Toast.LENGTH_SHORT).show();
+                        
+                        // Record visit in Firebase
+                        String userId = com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser() != null ? 
+                                com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser().getUid() : "unknown_user";
+                        java.util.Map<String, Object> visitData = new java.util.HashMap<>();
+                        visitData.put("userId", userId);
+                        visitData.put("libraryId", rawText);
+                        visitData.put("timestamp", System.currentTimeMillis());
+                        mDatabase.child("libraryVisits").push().setValue(visitData);
+                        
+                        // Open Library Details
+                        android.content.Intent intent = new android.content.Intent(QrScannerActivity.this, LibraryDetailsActivity.class);
+                        intent.putExtra(LibraryDetailsActivity.EXTRA_LIBRARY_ID, rawText);
+                        startActivity(intent);
+                        finish();
+                        return;
+                    }
+                    
                     Book foundBook = null;
                     String searchCode = !fBookId.isEmpty() ? fBookId : (!fIsbn.isEmpty() ? fIsbn : rawText);
                     
@@ -158,24 +190,27 @@ public class QrScannerActivity extends AppCompatActivity {
                                         issuedBook.setDueDate(System.currentTimeMillis() + (14L * 24 * 3600 * 1000));
                                         issuedBook.setStatus("Active");
 
-                                        mDatabase.child("issuedBooks").child(issuedBook.getIssuedBookId()).setValue(issuedBook);
-                                        mDatabase.child("bookRequests").child(fRequestId).child("status").setValue("COMPLETED");
-
-                                        // Decrement available copies
-                                        mDatabase.child("books").child(request.getBookId()).child("availableCopies").addListenerForSingleValueEvent(new ValueEventListener() {
+                                        mDatabase.child("books").child(request.getBookId()).child("availableCopies").runTransaction(new com.google.firebase.database.Transaction.Handler() {
+                                            @NonNull
                                             @Override
-                                            public void onDataChange(@NonNull DataSnapshot bkSnap) {
-                                                if (bkSnap.exists()) {
-                                                    Integer count = bkSnap.getValue(Integer.class);
-                                                    if (count != null && count > 0) {
-                                                        mDatabase.child("books").child(request.getBookId()).child("availableCopies").setValue(count - 1);
-                                                    }
+                                            public com.google.firebase.database.Transaction.Result doTransaction(@NonNull com.google.firebase.database.MutableData mutableData) {
+                                                Integer count = mutableData.getValue(Integer.class);
+                                                if (count == null || count <= 0) {
+                                                    return com.google.firebase.database.Transaction.abort();
                                                 }
-                                                Toast.makeText(QrScannerActivity.this, "Book Successfully Issued: " + request.getBookTitle(), Toast.LENGTH_LONG).show();
-                                                finish();
+                                                mutableData.setValue(count - 1);
+                                                return com.google.firebase.database.Transaction.success(mutableData);
                                             }
+
                                             @Override
-                                            public void onCancelled(@NonNull DatabaseError error) {
+                                            public void onComplete(@Nullable DatabaseError error, boolean committed, @Nullable DataSnapshot currentData) {
+                                                if (committed) {
+                                                    mDatabase.child("issuedBooks").child(issuedBook.getIssuedBookId()).setValue(issuedBook);
+                                                    mDatabase.child("bookRequests").child(fRequestId).child("status").setValue("COMPLETED");
+                                                    Toast.makeText(QrScannerActivity.this, "Book Successfully Issued: " + request.getBookTitle(), Toast.LENGTH_LONG).show();
+                                                } else {
+                                                    Toast.makeText(QrScannerActivity.this, "Failed to issue book. No copies available.", Toast.LENGTH_LONG).show();
+                                                }
                                                 finish();
                                             }
                                         });

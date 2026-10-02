@@ -34,6 +34,8 @@ public class BookDetailActivity extends AppCompatActivity {
     private DatabaseHelper dbHelper;
     private SessionManager sessionManager;
     private Book currentBook;
+    private ValueEventListener bookListener;
+    private DatabaseReference bookRef;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,7 +56,8 @@ public class BookDetailActivity extends AppCompatActivity {
 
         String bookId = getIntent().getStringExtra(EXTRA_BOOK_ID);
         if (bookId != null) {
-            mDatabase.child("books").child(bookId).addListenerForSingleValueEvent(new ValueEventListener() {
+            bookRef = mDatabase.child("books").child(bookId);
+            bookListener = new ValueEventListener() {
                 @Override
                 public void onDataChange(@NonNull DataSnapshot snapshot) {
                     if (snapshot.exists()) {
@@ -75,13 +78,22 @@ public class BookDetailActivity extends AppCompatActivity {
                     Toast.makeText(BookDetailActivity.this, "Error: " + error.getMessage(), Toast.LENGTH_SHORT).show();
                     finish();
                 }
-            });
+            };
+            bookRef.addValueEventListener(bookListener);
         } else {
             Toast.makeText(this, "Book details not found", Toast.LENGTH_SHORT).show();
             finish();
         }
 
         binding.btnRequestBook.setOnClickListener(v -> showRequestConfirmationDialog());
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (bookRef != null && bookListener != null) {
+            bookRef.removeEventListener(bookListener);
+        }
     }
 
     private void displayBookDetails() {
@@ -93,18 +105,109 @@ public class BookDetailActivity extends AppCompatActivity {
         binding.tvDetailsIsbn.setText("ISBN: " + currentBook.getIsbn());
         binding.tvDetailsPublisher.setText("Publisher: " + currentBook.getPublisher() + " (" + currentBook.getPublicationYear() + ")");
         binding.tvDetailsCopies.setText("Total Copies: " + currentBook.getTotalCopies() + " | Available: " + currentBook.getAvailableCopies());
-        binding.tvDetailsLocation.setText("Location: " + currentBook.getLocationId());
+        binding.tvDetailsLocation.setText("Location: " + currentBook.getLibraryId());
 
-        if (currentBook.getCoverImage() != null && !currentBook.getCoverImage().trim().isEmpty()) {
+        if (currentBook.getEffectiveCoverImage() != null && !currentBook.getEffectiveCoverImage().trim().isEmpty()) {
             Glide.with(this)
-                    .load(currentBook.getCoverImage())
+                    .load(currentBook.getEffectiveCoverImage())
                     .placeholder(R.drawable.ic_book)
                     .into(binding.imgDetailsCover);
+        } else {
+            binding.imgDetailsCover.setImageResource(R.drawable.ic_book);
         }
 
         if (currentBook.getAvailableCopies() <= 0) {
-            binding.btnRequestBook.setEnabled(false);
-            binding.btnRequestBook.setText("CURRENTLY UNAVAILABLE");
+            binding.btnRequestBook.setEnabled(true);
+            binding.btnRequestBook.setText("NOTIFY ME WHEN AVAILABLE");
+            binding.btnRequestBook.setOnClickListener(v -> setupAvailabilityAlert());
+        } else {
+            binding.btnRequestBook.setEnabled(true);
+            binding.btnRequestBook.setText("REQUEST BOOK");
+            binding.btnRequestBook.setOnClickListener(v -> showRequestConfirmationDialog());
+        }
+        
+        // Smart location
+        StringBuilder smartLoc = new StringBuilder();
+        if (currentBook.getFloor() != null) smartLoc.append("Floor: ").append(currentBook.getFloor()).append(" ");
+        if (currentBook.getRoom() != null) smartLoc.append("Room: ").append(currentBook.getRoom()).append(" ");
+        if (currentBook.getSection() != null) smartLoc.append("Section: ").append(currentBook.getSection()).append(" ");
+        if (currentBook.getShelf() != null) smartLoc.append("Shelf: ").append(currentBook.getShelf()).append(" ");
+        if (currentBook.getShelfNumber() != null) smartLoc.append("#").append(currentBook.getShelfNumber());
+        
+        if (smartLoc.length() > 0) {
+            binding.tvSmartLocation.setText(smartLoc.toString().trim());
+            binding.tvSmartLocation.setVisibility(View.VISIBLE);
+        }
+        
+        // We will show QR via menu instead of inline.
+        
+        // Fetch Library details
+        mDatabase.child("libraries").child(currentBook.getLibraryId()).addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (snapshot.exists()) {
+                    com.example.smartlibrary.models.LibraryLocation lib = snapshot.getValue(com.example.smartlibrary.models.LibraryLocation.class);
+                    if (lib != null) {
+                        binding.tvDetailsLocation.setText("Location: " + lib.getName());
+                        binding.tvDetailsAddress.setText(lib.getAddress());
+                        binding.tvDetailsAddress.setVisibility(View.VISIBLE);
+                        
+                        binding.btnGetDirections.setVisibility(View.VISIBLE);
+                        binding.btnGetDirections.setOnClickListener(v -> {
+                            android.net.Uri gmmIntentUri = android.net.Uri.parse("google.navigation:q=" + lib.getLatitude() + "," + lib.getLongitude());
+                            Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+                            mapIntent.setPackage("com.google.android.apps.maps");
+                            try {
+                                startActivity(mapIntent);
+                            } catch (Exception ex) {
+                                android.net.Uri geoUri = android.net.Uri.parse("geo:" + lib.getLatitude() + "," + lib.getLongitude() + "?q=" + lib.getLatitude() + "," + lib.getLongitude() + "(" + android.net.Uri.encode(lib.getName()) + ")");
+                                Intent fallbackIntent = new Intent(Intent.ACTION_VIEW, geoUri);
+                                startActivity(fallbackIntent);
+                            }
+                        });
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+            }
+        });
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_book_details, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull android.view.MenuItem item) {
+        if (item.getItemId() == R.id.action_show_qr) {
+            showBookQrDialog();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void showBookQrDialog() {
+        if (currentBook == null) return;
+        try {
+            android.graphics.Bitmap qrBitmap = com.example.smartlibrary.utils.QRCodeUtils.generateQRCode(currentBook.getBookId(), 500, 500);
+            if (qrBitmap != null) {
+                android.widget.ImageView imageView = new android.widget.ImageView(this);
+                imageView.setImageBitmap(qrBitmap);
+                int padding = 40;
+                imageView.setPadding(padding, padding, padding, padding);
+                
+                new AlertDialog.Builder(this)
+                        .setTitle("Book QR Code")
+                        .setView(imageView)
+                        .setPositiveButton("Close", null)
+                        .show();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -115,6 +218,34 @@ public class BookDetailActivity extends AppCompatActivity {
                 .setPositiveButton("Request Now", (dialog, which) -> submitBookRequest())
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    private void setupAvailabilityAlert() {
+        User user = sessionManager.getUserSession();
+        if (user == null) {
+            Toast.makeText(this, "Please log in to set an alert", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String alertId = "ALERT_" + currentBook.getBookId() + "_" + user.getUserId();
+        
+        java.util.Map<String, Object> alertData = new java.util.HashMap<>();
+        alertData.put("alertId", alertId);
+        alertData.put("bookId", currentBook.getBookId());
+        alertData.put("userId", user.getUserId());
+        alertData.put("createdAt", System.currentTimeMillis());
+        alertData.put("status", "ACTIVE");
+
+        mDatabase.child("availabilityAlerts").child(alertId).setValue(alertData)
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        Toast.makeText(this, "You will be notified when this book becomes available.", Toast.LENGTH_LONG).show();
+                        binding.btnRequestBook.setEnabled(false);
+                        binding.btnRequestBook.setText("ALERT SET");
+                    } else {
+                        Toast.makeText(this, "Failed to set alert.", Toast.LENGTH_SHORT).show();
+                    }
+                });
     }
 
     private void submitBookRequest() {

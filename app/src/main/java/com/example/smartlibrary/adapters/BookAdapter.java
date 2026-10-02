@@ -56,9 +56,9 @@ public class BookAdapter extends RecyclerView.Adapter<BookAdapter.BookViewHolder
             holder.binding.tvBookAvailability.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.danger));
         }
 
-        if (book.getCoverImage() != null && !book.getCoverImage().trim().isEmpty()) {
+        if (book.getEffectiveCoverImage() != null && !book.getEffectiveCoverImage().trim().isEmpty()) {
             Glide.with(holder.itemView.getContext())
-                    .load(book.getCoverImage())
+                    .load(book.getEffectiveCoverImage())
                     .placeholder(R.drawable.ic_book)
                     .error(R.drawable.ic_book)
                     .into(holder.binding.imgBookCover);

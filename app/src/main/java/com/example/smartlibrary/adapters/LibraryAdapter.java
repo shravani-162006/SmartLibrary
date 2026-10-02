@@ -45,12 +45,19 @@ public class LibraryAdapter extends RecyclerView.Adapter<LibraryAdapter.LibraryV
         holder.binding.tvLibraryAddress.setText(loc.getAddress());
         holder.binding.tvLibraryHours.setText(loc.getOpeningHours());
         holder.binding.tvLibraryPhone.setText("Phone: " + loc.getPhone());
+        
+        if (loc.getDistance() > 0) {
+            holder.binding.tvLibraryDistance.setVisibility(android.view.View.VISIBLE);
+            holder.binding.tvLibraryDistance.setText(String.format("%.1f km away", loc.getDistance() / 1000f));
+        } else {
+            holder.binding.tvLibraryDistance.setVisibility(android.view.View.GONE);
+        }
 
         holder.binding.btnCallLibrary.setOnClickListener(v -> {
             if (listener != null) listener.onCallClick(loc);
         });
 
-        holder.binding.btnViewOnMap.setOnClickListener(v -> {
+        holder.binding.btnViewLibrary.setOnClickListener(v -> {
             if (listener != null) listener.onMapClick(loc);
         });
     }

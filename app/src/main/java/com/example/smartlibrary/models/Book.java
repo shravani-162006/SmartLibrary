@@ -12,15 +12,28 @@ public class Book {
     private int availableCopies;
     private String description;
     private String coverImage;
-    private String locationId;
+    private String libraryId;
     private float rating;
+    
+    // Smart Book Location fields
+    private String floor;
+    private String room;
+    private String section;
+    private String shelf;
+    private String shelfNumber;
+    
+    // Additional requested fields
+    private String imageUrl;
+    private String qrCode;
+    private long createdAt;
+    private long updatedAt;
 
     public Book() {
     }
 
     public Book(String bookId, String title, String author, String category, String isbn,
                 String publisher, int publicationYear, int totalCopies, int availableCopies,
-                String description, String coverImage, String locationId, float rating) {
+                String description, String coverImage, String libraryId, float rating) {
         this.bookId = bookId;
         this.title = title;
         this.author = author;
@@ -32,7 +45,7 @@ public class Book {
         this.availableCopies = availableCopies;
         this.description = description;
         this.coverImage = coverImage;
-        this.locationId = locationId;
+        this.libraryId = libraryId;
         this.rating = rating;
     }
 
@@ -69,9 +82,43 @@ public class Book {
     public String getCoverImage() { return coverImage; }
     public void setCoverImage(String coverImage) { this.coverImage = coverImage; }
 
-    public String getLocationId() { return locationId; }
-    public void setLocationId(String locationId) { this.locationId = locationId; }
+    public String getLibraryId() { return libraryId; }
+    public void setLibraryId(String libraryId) { this.libraryId = libraryId; }
 
     public float getRating() { return rating; }
     public void setRating(float rating) { this.rating = rating; }
+
+    public String getFloor() { return floor; }
+    public void setFloor(String floor) { this.floor = floor; }
+
+    public String getRoom() { return room; }
+    public void setRoom(String room) { this.room = room; }
+
+    public String getSection() { return section; }
+    public void setSection(String section) { this.section = section; }
+
+    public String getShelf() { return shelf; }
+    public void setShelf(String shelf) { this.shelf = shelf; }
+
+    public String getShelfNumber() { return shelfNumber; }
+    public void setShelfNumber(String shelfNumber) { this.shelfNumber = shelfNumber; }
+    
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    
+    public String getQrCode() { return qrCode; }
+    public void setQrCode(String qrCode) { this.qrCode = qrCode; }
+    
+    public long getCreatedAt() { return createdAt; }
+    public void setCreatedAt(long createdAt) { this.createdAt = createdAt; }
+    
+    public long getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(long updatedAt) { this.updatedAt = updatedAt; }
+    
+    public String getEffectiveCoverImage() {
+        if (coverImage != null && !coverImage.trim().isEmpty()) {
+            return coverImage;
+        }
+        return imageUrl;
+    }
 }

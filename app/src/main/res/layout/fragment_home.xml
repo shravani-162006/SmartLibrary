@@ -106,6 +106,16 @@
                     android:text="Search books by title, author, or ISBN..."
                     android:textColor="@color/text_muted"
                     android:textSize="14sp" />
+
+                <ImageView
+                    android:id="@+id/btnHomeScanQr"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="8dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Scan QR"
+                    android:src="@drawable/ic_qr_scan"
+                    app:tint="@color/accent" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

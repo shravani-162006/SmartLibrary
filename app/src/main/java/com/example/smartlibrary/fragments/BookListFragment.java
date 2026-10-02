@@ -32,6 +32,7 @@ public class BookListFragment extends Fragment {
     private BookAdapter bookAdapter;
     private List<Book> allBooks = new java.util.ArrayList<>();
     private CategoryAdapter categoryAdapter;
+    private ValueEventListener booksListener;
 
     private String selectedCategory = "All";
     private String searchQuery = "";
@@ -49,9 +50,20 @@ public class BookListFragment extends Fragment {
 
         mDatabase = FirebaseDatabase.getInstance().getReference("books");
 
+        if (getArguments() != null) {
+            String q = getArguments().getString("searchQuery");
+            if (q != null) {
+                searchQuery = q;
+            }
+        }
+        
         setupCategoryChips();
         setupRecyclerView();
         setupSearchView();
+        
+        if (!searchQuery.isEmpty()) {
+            binding.searchViewBooks.setQuery(searchQuery, false);
+        }
 
         loadBooks();
     }
@@ -97,7 +109,11 @@ public class BookListFragment extends Fragment {
     }
 
     private void loadBooks() {
-        mDatabase.addValueEventListener(new ValueEventListener() {
+        if (binding == null) return;
+        binding.rvBookCatalog.setVisibility(View.GONE);
+        binding.layoutEmpty.emptyStateContainer.setVisibility(View.GONE);
+        
+        booksListener = new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 if (binding == null) return;
@@ -109,8 +125,15 @@ public class BookListFragment extends Fragment {
                 filterBooks();
             }
             @Override
-            public void onCancelled(@NonNull DatabaseError error) {}
-        });
+            public void onCancelled(@NonNull DatabaseError error) {
+                if (binding == null) return;
+                binding.rvBookCatalog.setVisibility(View.GONE);
+                binding.layoutEmpty.emptyStateContainer.setVisibility(View.VISIBLE);
+                binding.layoutEmpty.tvEmptyDescription.setText("Failed to load books. Tap to retry.");
+                binding.layoutEmpty.emptyStateContainer.setOnClickListener(v -> loadBooks());
+            }
+        };
+        mDatabase.addValueEventListener(booksListener);
     }
 
     private void filterBooks() {
@@ -120,7 +143,12 @@ public class BookListFragment extends Fragment {
         for (Book b : allBooks) {
             boolean matchCategory = selectedCategory.equals("All") || selectedCategory.equalsIgnoreCase(b.getCategory());
             boolean matchQuery = q.isEmpty() || (b.getTitle() != null && b.getTitle().toLowerCase().contains(q)) 
-                    || (b.getAuthor() != null && b.getAuthor().toLowerCase().contains(q));
+                    || (b.getAuthor() != null && b.getAuthor().toLowerCase().contains(q))
+                    || (b.getShelf() != null && b.getShelf().toLowerCase().equals(q));
+            
+            if (q.startsWith("shelf_") && b.getShelf() != null && b.getShelf().toLowerCase().equals(q)) {
+                matchQuery = true;
+            }
             
             if (matchCategory && matchQuery) {
                 filtered.add(b);
@@ -129,6 +157,8 @@ public class BookListFragment extends Fragment {
 
         if (filtered.isEmpty()) {
             binding.layoutEmpty.emptyStateContainer.setVisibility(View.VISIBLE);
+            binding.layoutEmpty.tvEmptyDescription.setText("No books found matching your criteria.");
+            binding.layoutEmpty.emptyStateContainer.setOnClickListener(null);
             binding.rvBookCatalog.setVisibility(View.GONE);
         } else {
             binding.layoutEmpty.emptyStateContainer.setVisibility(View.GONE);
@@ -140,6 +170,9 @@ public class BookListFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        if (mDatabase != null && booksListener != null) {
+            mDatabase.removeEventListener(booksListener);
+        }
         binding = null;
     }
 }

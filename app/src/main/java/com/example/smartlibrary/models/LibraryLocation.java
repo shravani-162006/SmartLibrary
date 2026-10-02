@@ -8,6 +8,9 @@ public class LibraryLocation {
     private String phone;
     private double latitude;
     private double longitude;
+    
+    @com.google.firebase.database.Exclude
+    private float distance;
 
     public LibraryLocation() {
     }
@@ -42,4 +45,10 @@ public class LibraryLocation {
 
     public double getLongitude() { return longitude; }
     public void setLongitude(double longitude) { this.longitude = longitude; }
+
+    @com.google.firebase.database.Exclude
+    public float getDistance() { return distance; }
+    
+    @com.google.firebase.database.Exclude
+    public void setDistance(float distance) { this.distance = distance; }
 }

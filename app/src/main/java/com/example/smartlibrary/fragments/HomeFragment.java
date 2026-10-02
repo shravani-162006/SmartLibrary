@@ -36,6 +36,10 @@ public class HomeFragment extends Fragment {
     private DatabaseReference mDatabase;
     private SessionManager sessionManager;
     private BookAdapter recentBookAdapter;
+    private ValueEventListener booksListener;
+    private ValueEventListener issuedBooksListener;
+    private ValueEventListener requestsListener;
+    private ValueEventListener librariesListener;
 
     @Nullable
     @Override
@@ -63,6 +67,10 @@ public class HomeFragment extends Fragment {
             if (getActivity() instanceof MainActivity) {
                 ((MainActivity) getActivity()).loadFragment(new BookListFragment(), "Available Books");
             }
+        });
+
+        binding.btnHomeScanQr.setOnClickListener(v -> {
+            startActivity(new Intent(requireContext(), com.example.smartlibrary.activities.QrScannerActivity.class));
         });
 
         // Click listeners for stat cards
@@ -126,54 +134,73 @@ public class HomeFragment extends Fragment {
     private void loadDashboardStats() {
         String userId = sessionManager.getUserSession() != null ? sessionManager.getUserSession().getUserId() : "user_101";
 
-        mDatabase.child("books").addValueEventListener(new ValueEventListener() {
+        booksListener = new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 if (binding == null) return;
-                long count = snapshot.getChildrenCount();
-                binding.tvStatAvailableCount.setText(count + " Books");
+                long totalAvailableCopies = 0;
                 List<Book> books = new java.util.ArrayList<>();
                 for (DataSnapshot data : snapshot.getChildren()) {
                     Book b = data.getValue(Book.class);
-                    if (b != null) books.add(b);
+                    if (b != null) {
+                        books.add(b);
+                        totalAvailableCopies += Math.max(0, b.getAvailableCopies());
+                    }
+                }
+                binding.tvStatAvailableCount.setText(totalAvailableCopies + " Available");
+                
+                // Sort by updated at (or fallback to original order), taking first 6
+                books.sort((b1, b2) -> Long.compare(b2.getUpdatedAt(), b1.getUpdatedAt()));
+                if (books.size() > 6) {
+                    books = books.subList(0, 6);
                 }
                 recentBookAdapter.setBooks(books);
             }
             @Override public void onCancelled(@NonNull DatabaseError error) {}
-        });
+        };
+        mDatabase.child("books").addValueEventListener(booksListener);
 
-        mDatabase.child("issuedBooks").orderByChild("userId").equalTo(userId).addValueEventListener(new ValueEventListener() {
+        issuedBooksListener = new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 if (binding == null) return;
                 long activeCount = 0;
                 for (DataSnapshot data : snapshot.getChildren()) {
                     String status = data.child("status").getValue(String.class);
-                    if ("Active".equals(status)) activeCount++;
+                    if ("Active".equalsIgnoreCase(status)) activeCount++;
                 }
                 binding.tvStatIssuedCount.setText(activeCount + " Borrowed");
             }
             @Override public void onCancelled(@NonNull DatabaseError error) {}
-        });
+        };
+        mDatabase.child("issuedBooks").orderByChild("userId").equalTo(userId).addValueEventListener(issuedBooksListener);
 
-        mDatabase.child("bookRequests").orderByChild("userId").equalTo(userId).addValueEventListener(new ValueEventListener() {
+        requestsListener = new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 if (binding == null) return;
-                long count = snapshot.getChildrenCount();
+                long count = 0;
+                for (DataSnapshot data : snapshot.getChildren()) {
+                    String status = data.child("status").getValue(String.class);
+                    if ("PENDING".equalsIgnoreCase(status) || "APPROVED".equalsIgnoreCase(status)) {
+                        count++;
+                    }
+                }
                 binding.tvStatPendingCount.setText(count + " Requests");
             }
             @Override public void onCancelled(@NonNull DatabaseError error) {}
-        });
+        };
+        mDatabase.child("bookRequests").orderByChild("userId").equalTo(userId).addValueEventListener(requestsListener);
 
-        mDatabase.child("libraries").addValueEventListener(new ValueEventListener() {
+        librariesListener = new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 if (binding == null) return;
                 binding.tvStatLocationsCount.setText(snapshot.getChildrenCount() + " Branches");
             }
             @Override public void onCancelled(@NonNull DatabaseError error) {}
-        });
+        };
+        mDatabase.child("libraries").addValueEventListener(librariesListener);
     }
 
     private void loadUserData() {
@@ -202,6 +229,18 @@ public class HomeFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        if (mDatabase != null) {
+            if (booksListener != null) mDatabase.child("books").removeEventListener(booksListener);
+            if (issuedBooksListener != null) {
+                String userId = sessionManager.getUserSession() != null ? sessionManager.getUserSession().getUserId() : "user_101";
+                mDatabase.child("issuedBooks").orderByChild("userId").equalTo(userId).removeEventListener(issuedBooksListener);
+            }
+            if (requestsListener != null) {
+                String userId = sessionManager.getUserSession() != null ? sessionManager.getUserSession().getUserId() : "user_101";
+                mDatabase.child("bookRequests").orderByChild("userId").equalTo(userId).removeEventListener(requestsListener);
+            }
+            if (librariesListener != null) mDatabase.child("libraries").removeEventListener(librariesListener);
+        }
         binding = null;
     }
 }

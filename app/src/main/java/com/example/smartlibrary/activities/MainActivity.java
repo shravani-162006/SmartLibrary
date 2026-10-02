@@ -86,7 +86,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         // Default Fragment
         if (savedInstanceState == null) {
-            loadFragment(new HomeFragment(), "Home");
+            String shelfQuery = getIntent().getStringExtra("EXTRA_SHELF_QUERY");
+            if (shelfQuery != null && !shelfQuery.isEmpty()) {
+                BookListFragment fragment = new BookListFragment();
+                Bundle args = new Bundle();
+                args.putString("searchQuery", shelfQuery);
+                fragment.setArguments(args);
+                loadFragment(fragment, "Shelf Books: " + shelfQuery);
+                binding.bottomNavigationView.setSelectedItemId(R.id.nav_books);
+            } else {
+                loadFragment(new HomeFragment(), "Home");
+            }
         }
     }
 
