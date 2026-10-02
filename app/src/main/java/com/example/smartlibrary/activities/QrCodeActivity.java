@@ -6,6 +6,12 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import androidx.annotation.NonNull;
 import com.example.smartlibrary.database.DatabaseHelper;
 import com.example.smartlibrary.databinding.ActivityQrCodeBinding;
 import com.example.smartlibrary.models.BookRequest;
@@ -17,7 +23,7 @@ public class QrCodeActivity extends AppCompatActivity {
     public static final String EXTRA_REQUEST_ID = "extra_request_id";
 
     private ActivityQrCodeBinding binding;
-    private DatabaseHelper dbHelper;
+    private DatabaseReference mDatabase;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -25,19 +31,33 @@ public class QrCodeActivity extends AppCompatActivity {
         binding = ActivityQrCodeBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        dbHelper = DatabaseHelper.getInstance(this);
+        mDatabase = FirebaseDatabase.getInstance().getReference("bookRequests");
 
         binding.btnBackQr.setOnClickListener(v -> finish());
 
         String requestId = getIntent().getStringExtra(EXTRA_REQUEST_ID);
         if (requestId != null) {
-            BookRequest request = dbHelper.getRequestById(requestId);
-            if (request != null) {
-                displayQrPass(request);
-            } else {
-                Toast.makeText(this, "Request pass not found", Toast.LENGTH_SHORT).show();
-                finish();
-            }
+            mDatabase.child(requestId).addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    if (snapshot.exists()) {
+                        BookRequest request = snapshot.getValue(BookRequest.class);
+                        if (request != null) {
+                            displayQrPass(request);
+                        } else {
+                            Toast.makeText(QrCodeActivity.this, "Request pass not found", Toast.LENGTH_SHORT).show();
+                            finish();
+                        }
+                    } else {
+                        Toast.makeText(QrCodeActivity.this, "Request pass not found", Toast.LENGTH_SHORT).show();
+                        finish();
+                    }
+                }
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {
+                    finish();
+                }
+            });
         } else {
             finish();
         }

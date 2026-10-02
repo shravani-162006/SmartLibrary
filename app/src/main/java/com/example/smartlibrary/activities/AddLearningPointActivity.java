@@ -5,6 +5,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.firebase.database.FirebaseDatabase;
 import com.example.smartlibrary.database.DatabaseHelper;
 import com.example.smartlibrary.databinding.ActivityAddLearningPointBinding;
 import com.example.smartlibrary.models.LearningPoint;
@@ -67,12 +68,13 @@ public class AddLearningPointActivity extends AppCompatActivity {
                 System.currentTimeMillis()
         );
 
-        boolean success = dbHelper.addLearningPoint(lp);
-        if (success) {
-            Toast.makeText(this, "Learning point saved successfully!", Toast.LENGTH_SHORT).show();
-            finish();
-        } else {
-            Toast.makeText(this, "Failed to save learning point", Toast.LENGTH_SHORT).show();
-        }
+        FirebaseDatabase.getInstance().getReference("learningPoints").child(lp.getId()).setValue(lp).addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                Toast.makeText(this, "Learning point saved successfully!", Toast.LENGTH_SHORT).show();
+                finish();
+            } else {
+                Toast.makeText(this, "Failed to save learning point", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 }

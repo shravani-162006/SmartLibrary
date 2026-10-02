@@ -11,6 +11,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 import com.example.smartlibrary.database.DatabaseHelper;
 import com.example.smartlibrary.databinding.FragmentFeedbackBinding;
 import com.example.smartlibrary.models.FeedbackItem;
@@ -22,6 +24,7 @@ import java.util.UUID;
 public class FeedbackFragment extends Fragment {
 
     private FragmentFeedbackBinding binding;
+    private DatabaseReference mDatabase;
     private DatabaseHelper dbHelper;
     private SessionManager sessionManager;
 
@@ -36,6 +39,7 @@ public class FeedbackFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        mDatabase = FirebaseDatabase.getInstance().getReference("feedback");
         dbHelper = DatabaseHelper.getInstance(requireContext());
         sessionManager = new SessionManager(requireContext());
 
@@ -60,16 +64,20 @@ public class FeedbackFragment extends Fragment {
                 userId, userName, rating, comments, System.currentTimeMillis()
         );
 
-        dbHelper.saveFeedback(fb);
-
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Feedback Submitted")
-                .setMessage("Thank you for your valuable feedback! We appreciate your support in improving Smart Library.")
-                .setPositiveButton("OK", (dialog, which) -> {
-                    binding.etFeedbackComments.setText("");
-                    binding.ratingBarFeedback.setRating(5f);
-                })
-                .show();
+        mDatabase.child(fb.getId()).setValue(fb).addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                new AlertDialog.Builder(requireContext())
+                        .setTitle("Feedback Submitted")
+                        .setMessage("Thank you for your valuable feedback! We appreciate your support in improving Smart Library.")
+                        .setPositiveButton("OK", (dialog, which) -> {
+                            binding.etFeedbackComments.setText("");
+                            binding.ratingBarFeedback.setRating(5f);
+                        })
+                        .show();
+            } else {
+                Toast.makeText(requireContext(), "Failed to submit feedback. Please try again later.", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override

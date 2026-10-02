@@ -10,7 +10,11 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.example.smartlibrary.adapters.HistoryAdapter;
-import com.example.smartlibrary.database.DatabaseHelper;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.example.smartlibrary.databinding.FragmentHistoryBinding;
 import com.example.smartlibrary.models.IssuedBook;
 import com.example.smartlibrary.utils.SessionManager;
@@ -22,7 +26,7 @@ import java.util.List;
 public class HistoryFragment extends Fragment {
 
     private FragmentHistoryBinding binding;
-    private DatabaseHelper dbHelper;
+    private DatabaseReference mDatabase;
     private SessionManager sessionManager;
     private HistoryAdapter adapter;
     private List<IssuedBook> fullHistoryList = new ArrayList<>();
@@ -38,7 +42,7 @@ public class HistoryFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        dbHelper = DatabaseHelper.getInstance(requireContext());
+        mDatabase = FirebaseDatabase.getInstance().getReference("issuedBooks");
         sessionManager = new SessionManager(requireContext());
 
         adapter = new HistoryAdapter();
@@ -59,8 +63,22 @@ public class HistoryFragment extends Fragment {
 
     private void loadHistory() {
         String userId = sessionManager.getUserSession() != null ? sessionManager.getUserSession().getUserId() : "user_101";
-        fullHistoryList = dbHelper.getIssuedBookHistory(userId);
-        filterHistory(binding.tabLayoutHistory.getSelectedTabPosition());
+        mDatabase.orderByChild("userId").equalTo(userId).addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (binding == null) return;
+                fullHistoryList.clear();
+                for (DataSnapshot data : snapshot.getChildren()) {
+                    IssuedBook ib = data.getValue(IssuedBook.class);
+                    if (ib != null) {
+                        fullHistoryList.add(ib);
+                    }
+                }
+                filterHistory(binding.tabLayoutHistory.getSelectedTabPosition());
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
     }
 
     private void filterHistory(int tabPosition) {

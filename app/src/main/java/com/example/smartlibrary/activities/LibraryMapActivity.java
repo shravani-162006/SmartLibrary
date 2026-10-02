@@ -7,12 +7,29 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
 import com.example.smartlibrary.databinding.ActivityLibraryMapBinding;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.database.ChildEventListener;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.example.smartlibrary.models.LibraryLocation;
+
 
 public class LibraryMapActivity extends AppCompatActivity implements OnMapReadyCallback {
 
@@ -23,17 +40,24 @@ public class LibraryMapActivity extends AppCompatActivity implements OnMapReadyC
     public static final String EXTRA_LIBRARY_LNG = "extra_library_lng";
 
     private ActivityLibraryMapBinding binding;
+    private FusedLocationProviderClient fusedLocationProviderClient;
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
+    private GoogleMap mMap;
+    private DatabaseReference librariesRef;
+
     private String name = "Central Smart Library";
     private String address = "100 Academic Way, Campus Center";
     private String hours = "Mon-Sat: 8:00 AM - 10:00 PM";
-    private double latitude = 37.7749;
-    private double longitude = -122.4194;
+    private double latitude = 18.5204; // Default to Pune, India
+    private double longitude = 73.8567;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivityLibraryMapBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        librariesRef = FirebaseDatabase.getInstance().getReference("libraries");
 
         binding.btnBackMap.setOnClickListener(v -> finish());
 
@@ -45,9 +69,11 @@ public class LibraryMapActivity extends AppCompatActivity implements OnMapReadyC
             longitude = getIntent().getDoubleExtra(EXTRA_LIBRARY_LNG, -122.4194);
         }
 
-        binding.tvMapBranchName.setText(name);
-        binding.tvMapBranchAddress.setText(address);
-        binding.tvMapBranchHours.setText(hours);
+        binding.tvMapBranchName.setText("Nearby Libraries");
+        binding.tvMapBranchAddress.setText("Explore libraries in your city");
+        binding.tvMapBranchHours.setText("Check details by tapping markers");
+
+        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
 
         binding.mapView.onCreate(savedInstanceState);
         binding.mapView.getMapAsync(this);
@@ -57,12 +83,73 @@ public class LibraryMapActivity extends AppCompatActivity implements OnMapReadyC
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
+        mMap = googleMap;
         try {
-            LatLng location = new LatLng(latitude, longitude);
-            googleMap.addMarker(new MarkerOptions().position(location).title(name).snippet(address));
-            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(location, 15f));
+            addCityLibraries(googleMap);
+            enableUserLocation();
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private void addCityLibraries(GoogleMap map) {
+        librariesRef.addChildEventListener(new ChildEventListener() {
+            @Override
+            public void onChildAdded(@NonNull DataSnapshot snapshot, String previousChildName) {
+                LibraryLocation lib = snapshot.getValue(LibraryLocation.class);
+                if (lib != null) {
+                    map.addMarker(new MarkerOptions()
+                            .position(new LatLng(lib.getLatitude(), lib.getLongitude()))
+                            .title(lib.getName())
+                            .snippet(lib.getAddress()));
+                }
+            }
+            @Override
+            public void onChildChanged(@NonNull DataSnapshot snapshot, String previousChildName) {
+                // To properly update, we would clear and reload or keep marker references.
+                // For simplicity, we can just clear and fetch all again on change, or ignore for now.
+            }
+            @Override
+            public void onChildRemoved(@NonNull DataSnapshot snapshot) {}
+            @Override
+            public void onChildMoved(@NonNull DataSnapshot snapshot, String previousChildName) {}
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(LibraryMapActivity.this, "Failed to load libraries.", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void enableUserLocation() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            mMap.setMyLocationEnabled(true);
+            Task<Location> locationTask = fusedLocationProviderClient.getLastLocation();
+            locationTask.addOnSuccessListener(location -> {
+                if (location != null) {
+                    LatLng currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, 12f));
+                } else {
+                    // Fallback to default city center
+                    LatLng defaultLatLng = new LatLng(18.5204, 73.8567);
+                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLatLng, 12f));
+                }
+            });
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                enableUserLocation();
+            } else {
+                Toast.makeText(this, "Location permission denied. Showing default city view.", Toast.LENGTH_LONG).show();
+                LatLng defaultLatLng = new LatLng(18.5204, 73.8567);
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(defaultLatLng, 12f));
+            }
         }
     }
 

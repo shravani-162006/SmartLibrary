@@ -11,13 +11,20 @@ import com.example.smartlibrary.database.DatabaseHelper;
 import com.example.smartlibrary.databinding.ActivityIssuedBookDetailsBinding;
 import com.example.smartlibrary.models.IssuedBook;
 import com.example.smartlibrary.utils.DateUtils;
+import com.example.smartlibrary.utils.SessionManager;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import androidx.annotation.NonNull;
 
 public class IssuedBookDetailsActivity extends AppCompatActivity {
 
     public static final String EXTRA_ISSUED_ID = "extra_issued_id";
 
     private ActivityIssuedBookDetailsBinding binding;
-    private DatabaseHelper dbHelper;
+    private DatabaseReference mDatabase;
     private IssuedBook currentIssuedBook;
 
     @Override
@@ -26,22 +33,31 @@ public class IssuedBookDetailsActivity extends AppCompatActivity {
         binding = ActivityIssuedBookDetailsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        dbHelper = DatabaseHelper.getInstance(this);
+        mDatabase = FirebaseDatabase.getInstance().getReference();
 
         binding.btnBackIssuedDetails.setOnClickListener(v -> finish());
 
         String issuedId = getIntent().getStringExtra(EXTRA_ISSUED_ID);
         if (issuedId != null) {
-            for (IssuedBook b : dbHelper.getIssuedBookHistory("user_101")) {
-                if (issuedId.equals(b.getIssuedBookId())) {
-                    currentIssuedBook = b;
-                    break;
+            mDatabase.child("issuedBooks").child(issuedId).addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    if (snapshot.exists()) {
+                        currentIssuedBook = snapshot.getValue(IssuedBook.class);
+                        if (currentIssuedBook != null) {
+                            displayIssuedDetails();
+                        } else {
+                            finish();
+                        }
+                    } else {
+                        finish();
+                    }
                 }
-            }
-        }
-
-        if (currentIssuedBook != null) {
-            displayIssuedDetails();
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {
+                    finish();
+                }
+            });
         } else {
             finish();
         }
@@ -83,11 +99,26 @@ public class IssuedBookDetailsActivity extends AppCompatActivity {
                 .setTitle("Return Book")
                 .setMessage("Are you sure you want to return '" + currentIssuedBook.getBookTitle() + "' to the library?")
                 .setPositiveButton("Return Book", (dialog, which) -> {
-                    boolean success = dbHelper.returnIssuedBook(currentIssuedBook.getIssuedBookId(), "");
-                    if (success) {
-                        Toast.makeText(this, "Book returned successfully!", Toast.LENGTH_SHORT).show();
-                        finish();
-                    }
+                    mDatabase.child("issuedBooks").child(currentIssuedBook.getIssuedBookId()).child("status").setValue("Returned");
+                    mDatabase.child("issuedBooks").child(currentIssuedBook.getIssuedBookId()).child("returnDate").setValue(System.currentTimeMillis());
+                    
+                    mDatabase.child("books").child(currentIssuedBook.getBookId()).child("availableCopies").addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(@NonNull DataSnapshot snapshot) {
+                            if (snapshot.exists()) {
+                                Integer current = snapshot.getValue(Integer.class);
+                                if (current != null) {
+                                    mDatabase.child("books").child(currentIssuedBook.getBookId()).child("availableCopies").setValue(current + 1);
+                                }
+                            }
+                            Toast.makeText(IssuedBookDetailsActivity.this, "Book returned successfully!", Toast.LENGTH_SHORT).show();
+                            finish();
+                        }
+                        @Override
+                        public void onCancelled(@NonNull DatabaseError error) {
+                            finish();
+                        }
+                    });
                 })
                 .setNegativeButton("Cancel", null)
                 .show();

@@ -4,6 +4,7 @@ import android.os.Bundle;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.firebase.database.FirebaseDatabase;
 import com.example.smartlibrary.database.DatabaseHelper;
 import com.example.smartlibrary.databinding.ActivityQuizResultBinding;
 import com.example.smartlibrary.models.QuizResult;
@@ -54,7 +55,7 @@ public class QuizResultActivity extends AppCompatActivity {
                     user.getName(),
                     score, total, percentage, System.currentTimeMillis()
             );
-            DatabaseHelper.getInstance(this).saveQuizResult(qr);
+            FirebaseDatabase.getInstance().getReference("quizResults").child(qr.getId()).setValue(qr);
         }
 
         binding.btnRetryQuiz.setOnClickListener(v -> finish());

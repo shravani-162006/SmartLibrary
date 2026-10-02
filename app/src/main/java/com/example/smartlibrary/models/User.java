@@ -9,6 +9,8 @@ public class User {
     private String password;
     private String profileImage;
     private String role; // "student" or "admin"
+    private String provider;
+    private long lastLogin;
     private long createdAt;
 
     public User() {
@@ -52,4 +54,10 @@ public class User {
 
     public long getCreatedAt() { return createdAt; }
     public void setCreatedAt(long createdAt) { this.createdAt = createdAt; }
+
+    public String getProvider() { return provider; }
+    public void setProvider(String provider) { this.provider = provider; }
+
+    public long getLastLogin() { return lastLogin; }
+    public void setLastLogin(long lastLogin) { this.lastLogin = lastLogin; }
 }

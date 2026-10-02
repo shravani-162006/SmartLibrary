@@ -15,6 +15,11 @@ import com.example.smartlibrary.databinding.ActivityQrScannerBinding;
 import com.example.smartlibrary.models.Book;
 import com.example.smartlibrary.models.BookRequest;
 import com.example.smartlibrary.models.IssuedBook;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.google.zxing.ResultPoint;
 import com.journeyapps.barcodescanner.BarcodeCallback;
 import com.journeyapps.barcodescanner.BarcodeResult;
@@ -27,6 +32,7 @@ public class QrScannerActivity extends AppCompatActivity {
 
     private static final int CAMERA_PERMISSION_REQUEST = 1002;
     private ActivityQrScannerBinding binding;
+    private DatabaseReference mDatabase;
     private DatabaseHelper dbHelper;
     private boolean isScanned = false;
 
@@ -36,6 +42,7 @@ public class QrScannerActivity extends AppCompatActivity {
         binding = ActivityQrScannerBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
+        mDatabase = FirebaseDatabase.getInstance().getReference();
         dbHelper = DatabaseHelper.getInstance(this);
 
         binding.btnBackScanner.setOnClickListener(v -> finish());
@@ -108,54 +115,90 @@ public class QrScannerActivity extends AppCompatActivity {
                 bookId = rawText.trim();
             }
 
-            // First: check if this is a direct Book QR code or ISBN
-            Book book = null;
-            if (!bookId.isEmpty()) {
-                book = dbHelper.findBookByCode(bookId);
-            }
-            if (book == null && !isbn.isEmpty()) {
-                book = dbHelper.findBookByCode(isbn);
-            }
-            if (book == null && !rawText.startsWith("{")) {
-                book = dbHelper.findBookByCode(rawText);
-            }
+            final String fRequestId = requestId;
+            final String fBookId = bookId;
+            final String fIsbn = isbn;
 
-            if (book != null) {
-                Toast.makeText(this, "Book Found: " + book.getTitle(), Toast.LENGTH_SHORT).show();
-                android.content.Intent intent = new android.content.Intent(this, BookDetailActivity.class);
-                intent.putExtra(BookDetailActivity.EXTRA_BOOK_ID, book.getBookId());
-                startActivity(intent);
-                finish();
-                return;
-            }
+            mDatabase.child("books").addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    Book foundBook = null;
+                    String searchCode = !fBookId.isEmpty() ? fBookId : (!fIsbn.isEmpty() ? fIsbn : rawText);
+                    
+                    for (DataSnapshot data : snapshot.getChildren()) {
+                        Book b = data.getValue(Book.class);
+                        if (b != null && (searchCode.equals(b.getBookId()) || searchCode.equals(b.getIsbn()))) {
+                            foundBook = b;
+                            break;
+                        }
+                    }
 
-            // Second: check if this is a Book Request QR pass for library issuing
-            if (!requestId.isEmpty()) {
-                BookRequest request = dbHelper.getRequestById(requestId);
-                if (request != null && "APPROVED".equalsIgnoreCase(request.getStatus())) {
-                    IssuedBook issuedBook = new IssuedBook();
-                    issuedBook.setIssuedBookId("ISS_" + System.currentTimeMillis());
-                    issuedBook.setUserId(request.getUserId());
-                    issuedBook.setBookId(request.getBookId());
-                    issuedBook.setRequestId(request.getRequestId());
-                    issuedBook.setBookTitle(request.getBookTitle());
-                    issuedBook.setBookAuthor(request.getBookAuthor());
-                    issuedBook.setBookCoverImage(request.getBookCoverImage());
-                    issuedBook.setIssueDate(System.currentTimeMillis());
-                    issuedBook.setDueDate(System.currentTimeMillis() + (14L * 24 * 3600 * 1000));
-                    issuedBook.setStatus("ISSUED");
+                    if (foundBook != null) {
+                        Toast.makeText(QrScannerActivity.this, "Book Found: " + foundBook.getTitle(), Toast.LENGTH_SHORT).show();
+                        android.content.Intent intent = new android.content.Intent(QrScannerActivity.this, BookDetailActivity.class);
+                        intent.putExtra(BookDetailActivity.EXTRA_BOOK_ID, foundBook.getBookId());
+                        startActivity(intent);
+                        finish();
+                    } else if (!fRequestId.isEmpty()) {
+                        mDatabase.child("bookRequests").child(fRequestId).addListenerForSingleValueEvent(new ValueEventListener() {
+                            @Override
+                            public void onDataChange(@NonNull DataSnapshot reqSnapshot) {
+                                if (reqSnapshot.exists()) {
+                                    BookRequest request = reqSnapshot.getValue(BookRequest.class);
+                                    if (request != null && "APPROVED".equalsIgnoreCase(request.getStatus())) {
+                                        IssuedBook issuedBook = new IssuedBook();
+                                        issuedBook.setIssuedBookId("ISS_" + System.currentTimeMillis());
+                                        issuedBook.setUserId(request.getUserId());
+                                        issuedBook.setBookId(request.getBookId());
+                                        issuedBook.setRequestId(request.getRequestId());
+                                        issuedBook.setBookTitle(request.getBookTitle());
+                                        issuedBook.setBookAuthor(request.getBookAuthor());
+                                        issuedBook.setBookCoverImage(request.getBookCoverImage());
+                                        issuedBook.setIssueDate(System.currentTimeMillis());
+                                        issuedBook.setDueDate(System.currentTimeMillis() + (14L * 24 * 3600 * 1000));
+                                        issuedBook.setStatus("Active");
 
-                    dbHelper.issueBookToUser(issuedBook);
-                    dbHelper.updateRequestStatus(requestId, "COMPLETED", null, 0, 0);
+                                        mDatabase.child("issuedBooks").child(issuedBook.getIssuedBookId()).setValue(issuedBook);
+                                        mDatabase.child("bookRequests").child(fRequestId).child("status").setValue("COMPLETED");
 
-                    Toast.makeText(this, "Book Successfully Issued: " + request.getBookTitle(), Toast.LENGTH_LONG).show();
-                    finish();
-                    return;
+                                        // Decrement available copies
+                                        mDatabase.child("books").child(request.getBookId()).child("availableCopies").addListenerForSingleValueEvent(new ValueEventListener() {
+                                            @Override
+                                            public void onDataChange(@NonNull DataSnapshot bkSnap) {
+                                                if (bkSnap.exists()) {
+                                                    Integer count = bkSnap.getValue(Integer.class);
+                                                    if (count != null && count > 0) {
+                                                        mDatabase.child("books").child(request.getBookId()).child("availableCopies").setValue(count - 1);
+                                                    }
+                                                }
+                                                Toast.makeText(QrScannerActivity.this, "Book Successfully Issued: " + request.getBookTitle(), Toast.LENGTH_LONG).show();
+                                                finish();
+                                            }
+                                            @Override
+                                            public void onCancelled(@NonNull DatabaseError error) {
+                                                finish();
+                                            }
+                                        });
+                                    } else {
+                                        Toast.makeText(QrScannerActivity.this, "Request pass not valid or already used.", Toast.LENGTH_LONG).show();
+                                        finish();
+                                    }
+                                } else {
+                                    Toast.makeText(QrScannerActivity.this, "Request pass not found.", Toast.LENGTH_LONG).show();
+                                    finish();
+                                }
+                            }
+                            @Override
+                            public void onCancelled(@NonNull DatabaseError error) { finish(); }
+                        });
+                    } else {
+                        Toast.makeText(QrScannerActivity.this, "No book or valid request pass found.", Toast.LENGTH_LONG).show();
+                        finish();
+                    }
                 }
-            }
-
-            Toast.makeText(this, "No book or valid request pass found for scanned QR code.", Toast.LENGTH_LONG).show();
-            finish();
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) { finish(); }
+            });
 
         } catch (Exception e) {
             e.printStackTrace();

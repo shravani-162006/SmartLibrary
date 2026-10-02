@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "711569033558",
+    "firebase_url": "https://smart-library-b3341-default-rtdb.firebaseio.com",
     "project_id": "smart-library-b3341",
     "storage_bucket": "smart-library-b3341.firebasestorage.app"
   },
@@ -12,15 +13,25 @@
           "package_name": "com.example.smartlibrary"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "711569033558-g75s6cqbndrk0egcf7tj0l6o8t1rde8v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "YOUR_FIREBASE_API_KEY"
+          "current_key": "AIzaSyAPL4NB31pTlCtzWXRETZJCKP0hrW6q34A"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "711569033558-g75s6cqbndrk0egcf7tj0l6o8t1rde8v.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

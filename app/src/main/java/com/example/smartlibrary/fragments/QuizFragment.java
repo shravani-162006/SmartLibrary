@@ -14,7 +14,11 @@ import androidx.fragment.app.Fragment;
 
 import com.example.smartlibrary.R;
 import com.example.smartlibrary.activities.QuizResultActivity;
-import com.example.smartlibrary.database.DatabaseHelper;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.example.smartlibrary.databinding.FragmentQuizBinding;
 import com.example.smartlibrary.models.QuizQuestion;
 
@@ -24,7 +28,7 @@ import java.util.List;
 public class QuizFragment extends Fragment {
 
     private FragmentQuizBinding binding;
-    private DatabaseHelper dbHelper;
+    private DatabaseReference mDatabase;
     private List<QuizQuestion> questionList = new ArrayList<>();
     private int currentIndex = 0;
     private int score = 0;
@@ -41,16 +45,30 @@ public class QuizFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        dbHelper = DatabaseHelper.getInstance(requireContext());
-        questionList = dbHelper.getAllQuizQuestions();
-
-        if (questionList.isEmpty()) {
-            Toast.makeText(requireContext(), "No quiz questions available", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        mDatabase = FirebaseDatabase.getInstance().getReference("quiz");
 
         setupOptionButtons();
-        displayQuestion();
+        
+        mDatabase.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (binding == null) return;
+                questionList.clear();
+                for (DataSnapshot data : snapshot.getChildren()) {
+                    QuizQuestion q = data.getValue(QuizQuestion.class);
+                    if (q != null) questionList.add(q);
+                }
+                if (questionList.isEmpty()) {
+                    Toast.makeText(requireContext(), "No quiz questions available", Toast.LENGTH_SHORT).show();
+                } else {
+                    displayQuestion();
+                }
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(requireContext(), "Failed to load quiz", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         binding.btnNextQuestion.setOnClickListener(v -> handleNextButtonClick());
     }

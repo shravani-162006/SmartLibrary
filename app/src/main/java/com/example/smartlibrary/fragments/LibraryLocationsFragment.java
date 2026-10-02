@@ -14,7 +14,11 @@ import androidx.fragment.app.Fragment;
 
 import com.example.smartlibrary.activities.LibraryMapActivity;
 import com.example.smartlibrary.adapters.LibraryAdapter;
-import com.example.smartlibrary.database.DatabaseHelper;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.example.smartlibrary.databinding.FragmentLibraryLocationsBinding;
 import com.example.smartlibrary.models.LibraryLocation;
 
@@ -23,7 +27,7 @@ import java.util.List;
 public class LibraryLocationsFragment extends Fragment {
 
     private FragmentLibraryLocationsBinding binding;
-    private DatabaseHelper dbHelper;
+    private DatabaseReference mDatabase;
     private LibraryAdapter adapter;
 
     @Nullable
@@ -37,7 +41,7 @@ public class LibraryLocationsFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        dbHelper = DatabaseHelper.getInstance(requireContext());
+        mDatabase = FirebaseDatabase.getInstance().getReference("libraries");
 
         adapter = new LibraryAdapter(new LibraryAdapter.OnLibraryClickListener() {
             @Override
@@ -68,15 +72,31 @@ public class LibraryLocationsFragment extends Fragment {
     }
 
     private void loadLibraries() {
-        List<LibraryLocation> libraries = dbHelper.getAllLibraries();
-        if (libraries.isEmpty()) {
-            binding.layoutEmpty.emptyStateContainer.setVisibility(View.VISIBLE);
-            binding.rvLibraryLocations.setVisibility(View.GONE);
-        } else {
-            binding.layoutEmpty.emptyStateContainer.setVisibility(View.GONE);
-            binding.rvLibraryLocations.setVisibility(View.VISIBLE);
-            adapter.setLibraries(libraries);
-        }
+        mDatabase.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (binding == null) return;
+                List<LibraryLocation> libraries = new java.util.ArrayList<>();
+                for (DataSnapshot data : snapshot.getChildren()) {
+                    LibraryLocation lib = data.getValue(LibraryLocation.class);
+                    if (lib != null) {
+                        libraries.add(lib);
+                    }
+                }
+                if (libraries.isEmpty()) {
+                    binding.layoutEmpty.emptyStateContainer.setVisibility(View.VISIBLE);
+                    binding.rvLibraryLocations.setVisibility(View.GONE);
+                } else {
+                    binding.layoutEmpty.emptyStateContainer.setVisibility(View.GONE);
+                    binding.rvLibraryLocations.setVisibility(View.VISIBLE);
+                    adapter.setLibraries(libraries);
+                }
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(requireContext(), "Failed to load libraries.", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override

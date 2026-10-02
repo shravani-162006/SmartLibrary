@@ -59,6 +59,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         binding.navigationView.setNavigationItemSelectedListener(this);
 
         updateNavHeader();
+        
+        com.example.smartlibrary.database.FirebaseManager.getInstance(this).seedFirebaseData();
 
         // Bottom Navigation Listener
         binding.bottomNavigationView.setOnItemSelectedListener(item -> {
@@ -193,6 +195,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         finish();
     }
 
+    @android.annotation.SuppressLint("GestureBackNavigation")
     @Override
     public void onBackPressed() {
         if (binding.drawerLayout.isDrawerOpen(GravityCompat.START)) {

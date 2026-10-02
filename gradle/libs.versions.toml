@@ -29,6 +29,8 @@ firebaseDatabase = "21.0.0"
 
 glide = "4.16.0"
 playServicesMaps = "18.2.0"
+playServicesLocation = "21.2.0"
+playServicesAuth = "21.1.0"
 firebaseMessaging = "24.0.0"
 
 [libraries]
@@ -67,6 +69,8 @@ firebase-database = { group = "com.google.firebase", name = "firebase-database",
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
 glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
+play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 
 
 

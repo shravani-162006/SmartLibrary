@@ -14,7 +14,11 @@ import androidx.fragment.app.Fragment;
 import com.example.smartlibrary.activities.BookDetailActivity;
 import com.example.smartlibrary.adapters.BookAdapter;
 import com.example.smartlibrary.adapters.CategoryAdapter;
-import com.example.smartlibrary.database.DatabaseHelper;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.example.smartlibrary.databinding.FragmentBooksBinding;
 import com.example.smartlibrary.models.Book;
 
@@ -24,8 +28,9 @@ import java.util.List;
 public class BookListFragment extends Fragment {
 
     private FragmentBooksBinding binding;
-    private DatabaseHelper dbHelper;
+    private DatabaseReference mDatabase;
     private BookAdapter bookAdapter;
+    private List<Book> allBooks = new java.util.ArrayList<>();
     private CategoryAdapter categoryAdapter;
 
     private String selectedCategory = "All";
@@ -42,7 +47,7 @@ public class BookListFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        dbHelper = DatabaseHelper.getInstance(requireContext());
+        mDatabase = FirebaseDatabase.getInstance().getReference("books");
 
         setupCategoryChips();
         setupRecyclerView();
@@ -59,7 +64,7 @@ public class BookListFragment extends Fragment {
         );
         categoryAdapter = new CategoryAdapter(categories, category -> {
             selectedCategory = category;
-            loadBooks();
+            filterBooks();
         });
         binding.rvCategoryChips.setAdapter(categoryAdapter);
     }
@@ -78,29 +83,57 @@ public class BookListFragment extends Fragment {
             @Override
             public boolean onQueryTextSubmit(String query) {
                 searchQuery = query;
-                loadBooks();
+                filterBooks();
                 return true;
             }
 
             @Override
             public boolean onQueryTextChange(String newText) {
                 searchQuery = newText;
-                loadBooks();
+                filterBooks();
                 return true;
             }
         });
     }
 
     private void loadBooks() {
-        List<Book> books = dbHelper.searchBooks(searchQuery, selectedCategory);
+        mDatabase.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (binding == null) return;
+                allBooks.clear();
+                for (DataSnapshot data : snapshot.getChildren()) {
+                    Book book = data.getValue(Book.class);
+                    if (book != null) allBooks.add(book);
+                }
+                filterBooks();
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+    }
 
-        if (books.isEmpty()) {
+    private void filterBooks() {
+        if (binding == null) return;
+        List<Book> filtered = new java.util.ArrayList<>();
+        String q = searchQuery.toLowerCase().trim();
+        for (Book b : allBooks) {
+            boolean matchCategory = selectedCategory.equals("All") || selectedCategory.equalsIgnoreCase(b.getCategory());
+            boolean matchQuery = q.isEmpty() || (b.getTitle() != null && b.getTitle().toLowerCase().contains(q)) 
+                    || (b.getAuthor() != null && b.getAuthor().toLowerCase().contains(q));
+            
+            if (matchCategory && matchQuery) {
+                filtered.add(b);
+            }
+        }
+
+        if (filtered.isEmpty()) {
             binding.layoutEmpty.emptyStateContainer.setVisibility(View.VISIBLE);
             binding.rvBookCatalog.setVisibility(View.GONE);
         } else {
             binding.layoutEmpty.emptyStateContainer.setVisibility(View.GONE);
             binding.rvBookCatalog.setVisibility(View.VISIBLE);
-            bookAdapter.setBooks(books);
+            bookAdapter.setBooks(filtered);
         }
     }
 

@@ -14,7 +14,11 @@ import com.example.smartlibrary.activities.BookDetailActivity;
 import com.example.smartlibrary.activities.MainActivity;
 import com.example.smartlibrary.adapters.BookAdapter;
 import com.example.smartlibrary.adapters.CategoryAdapter;
-import com.example.smartlibrary.database.DatabaseHelper;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.example.smartlibrary.databinding.FragmentHomeBinding;
 import com.example.smartlibrary.models.Book;
 import com.example.smartlibrary.models.User;
@@ -29,7 +33,7 @@ import com.example.smartlibrary.R;
 public class HomeFragment extends Fragment {
 
     private FragmentHomeBinding binding;
-    private DatabaseHelper dbHelper;
+    private DatabaseReference mDatabase;
     private SessionManager sessionManager;
     private BookAdapter recentBookAdapter;
 
@@ -44,7 +48,7 @@ public class HomeFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        dbHelper = DatabaseHelper.getInstance(requireContext());
+        mDatabase = FirebaseDatabase.getInstance().getReference();
         sessionManager = new SessionManager(requireContext());
 
         loadUserData();
@@ -120,19 +124,56 @@ public class HomeFragment extends Fragment {
     }
 
     private void loadDashboardStats() {
-        List<Book> books = dbHelper.getAllBooks();
-        binding.tvStatAvailableCount.setText(books.size() + " Books");
-        recentBookAdapter.setBooks(books);
-
         String userId = sessionManager.getUserSession() != null ? sessionManager.getUserSession().getUserId() : "user_101";
-        int issuedCount = dbHelper.getActiveIssuedBooks(userId).size();
-        binding.tvStatIssuedCount.setText(issuedCount + " Borrowed");
 
-        int pendingCount = dbHelper.getUserRequests(userId).size();
-        binding.tvStatPendingCount.setText(pendingCount + " Requests");
+        mDatabase.child("books").addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (binding == null) return;
+                long count = snapshot.getChildrenCount();
+                binding.tvStatAvailableCount.setText(count + " Books");
+                List<Book> books = new java.util.ArrayList<>();
+                for (DataSnapshot data : snapshot.getChildren()) {
+                    Book b = data.getValue(Book.class);
+                    if (b != null) books.add(b);
+                }
+                recentBookAdapter.setBooks(books);
+            }
+            @Override public void onCancelled(@NonNull DatabaseError error) {}
+        });
 
-        int locationCount = dbHelper.getAllLibraries().size();
-        binding.tvStatLocationsCount.setText(locationCount + " Branches");
+        mDatabase.child("issuedBooks").orderByChild("userId").equalTo(userId).addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (binding == null) return;
+                long activeCount = 0;
+                for (DataSnapshot data : snapshot.getChildren()) {
+                    String status = data.child("status").getValue(String.class);
+                    if ("Active".equals(status)) activeCount++;
+                }
+                binding.tvStatIssuedCount.setText(activeCount + " Borrowed");
+            }
+            @Override public void onCancelled(@NonNull DatabaseError error) {}
+        });
+
+        mDatabase.child("bookRequests").orderByChild("userId").equalTo(userId).addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (binding == null) return;
+                long count = snapshot.getChildrenCount();
+                binding.tvStatPendingCount.setText(count + " Requests");
+            }
+            @Override public void onCancelled(@NonNull DatabaseError error) {}
+        });
+
+        mDatabase.child("libraries").addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (binding == null) return;
+                binding.tvStatLocationsCount.setText(snapshot.getChildrenCount() + " Branches");
+            }
+            @Override public void onCancelled(@NonNull DatabaseError error) {}
+        });
     }
 
     private void loadUserData() {

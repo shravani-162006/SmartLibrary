@@ -16,7 +16,14 @@ import com.example.smartlibrary.R;
 import com.example.smartlibrary.activities.EditProfileActivity;
 import com.example.smartlibrary.activities.ForgotPasswordActivity;
 import com.example.smartlibrary.activities.MainActivity;
-import com.example.smartlibrary.database.DatabaseHelper;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import com.example.smartlibrary.activities.EditProfileActivity;
+import com.example.smartlibrary.activities.ForgotPasswordActivity;
+import com.example.smartlibrary.activities.MainActivity;
 import com.example.smartlibrary.databinding.FragmentProfileBinding;
 import com.example.smartlibrary.models.IssuedBook;
 import com.example.smartlibrary.models.User;
@@ -29,7 +36,7 @@ public class ProfileFragment extends Fragment {
 
     private FragmentProfileBinding binding;
     private SessionManager sessionManager;
-    private DatabaseHelper dbHelper;
+    private DatabaseReference mDatabase;
 
     @Nullable
     @Override
@@ -43,7 +50,7 @@ public class ProfileFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         sessionManager = new SessionManager(requireContext());
-        dbHelper = DatabaseHelper.getInstance(requireContext());
+        mDatabase = FirebaseDatabase.getInstance().getReference();
 
         displayUserProfile();
 
@@ -88,25 +95,38 @@ public class ProfileFragment extends Fragment {
             binding.tvProfileBorrowLimit.setText("5 Books Max Limit");
 
             // Query DB for live stats
-            List<IssuedBook> activeLoans = dbHelper.getActiveIssuedBooks(user.getUserId());
-            binding.tvProfileActiveLoans.setText(activeLoans.size() + " Book(s) Borrowed");
+            mDatabase.child("issuedBooks").orderByChild("userId").equalTo(user.getUserId()).addValueEventListener(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    if (binding == null) return;
+                    int activeLoans = 0;
+                    double totalFine = 0.0;
+                    
+                    for (DataSnapshot data : snapshot.getChildren()) {
+                        IssuedBook b = data.getValue(IssuedBook.class);
+                        if (b != null && "Active".equals(b.getStatus())) {
+                            activeLoans++;
+                            if (System.currentTimeMillis() > b.getDueDate()) {
+                                long diff = System.currentTimeMillis() - b.getDueDate();
+                                long overdueDays = (diff / (1000 * 60 * 60 * 24)) + 1;
+                                totalFine += overdueDays * 1.50;
+                            }
+                        }
+                    }
 
-            double totalFine = 0.0;
-            for (IssuedBook b : activeLoans) {
-                if (System.currentTimeMillis() > b.getDueDate()) {
-                    long diff = System.currentTimeMillis() - b.getDueDate();
-                    long overdueDays = (diff / (1000 * 60 * 60 * 24)) + 1;
-                    totalFine += overdueDays * 1.50;
+                    binding.tvProfileActiveLoans.setText(activeLoans + " Book(s) Borrowed");
+                    
+                    if (totalFine > 0) {
+                        binding.tvProfileFineStanding.setText(String.format(Locale.getDefault(), "$%.2f (Overdue Fine Pending)", totalFine));
+                        binding.tvProfileFineStanding.setTextColor(requireContext().getColor(R.color.danger));
+                    } else {
+                        binding.tvProfileFineStanding.setText("$0.00 (Clean Standing)");
+                        binding.tvProfileFineStanding.setTextColor(requireContext().getColor(R.color.success));
+                    }
                 }
-            }
-
-            if (totalFine > 0) {
-                binding.tvProfileFineStanding.setText(String.format(Locale.getDefault(), "$%.2f (Overdue Fine Pending)", totalFine));
-                binding.tvProfileFineStanding.setTextColor(requireContext().getColor(R.color.danger));
-            } else {
-                binding.tvProfileFineStanding.setText("$0.00 (Clean Standing)");
-                binding.tvProfileFineStanding.setTextColor(requireContext().getColor(R.color.success));
-            }
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {}
+            });
         }
     }
 
