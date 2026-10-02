@@ -23,6 +23,9 @@ import com.example.smartlibrary.utils.SessionManager;
 import java.util.Arrays;
 import java.util.List;
 
+import com.bumptech.glide.Glide;
+import com.example.smartlibrary.R;
+
 public class HomeFragment extends Fragment {
 
     private FragmentHomeBinding binding;
@@ -44,10 +47,7 @@ public class HomeFragment extends Fragment {
         dbHelper = DatabaseHelper.getInstance(requireContext());
         sessionManager = new SessionManager(requireContext());
 
-        User user = sessionManager.getUserSession();
-        if (user != null) {
-            binding.tvHomeUserName.setText(user.getName());
-        }
+        loadUserData();
 
         binding.btnNotificationHeader.setOnClickListener(v -> {
             if (getActivity() instanceof MainActivity) {
@@ -133,6 +133,29 @@ public class HomeFragment extends Fragment {
 
         int locationCount = dbHelper.getAllLibraries().size();
         binding.tvStatLocationsCount.setText(locationCount + " Branches");
+    }
+
+    private void loadUserData() {
+        User user = sessionManager.getUserSession();
+        if (user != null && binding != null) {
+            binding.tvHomeUserName.setText(user.getName());
+            if (user.getProfileImage() != null && !user.getProfileImage().trim().isEmpty()) {
+                Glide.with(this)
+                        .load(user.getProfileImage())
+                        .placeholder(R.drawable.ic_profile)
+                        .error(R.drawable.ic_profile)
+                        .into(binding.imgHomeProfile);
+            } else {
+                binding.imgHomeProfile.setImageResource(R.drawable.ic_profile);
+            }
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        loadUserData();
+        loadDashboardStats();
     }
 
     @Override

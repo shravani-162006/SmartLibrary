@@ -26,9 +26,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:contentDescription="App Logo"
-                android:padding="20dp"
-                android:src="@drawable/ic_book"
-                app:tint="@color/accent" />
+                android:padding="0dp"
+                android:src="@drawable/ic_library_logo" />
         </com.google.android.material.card.MaterialCardView>
 
         <TextView

@@ -44,11 +44,10 @@
             android:orientation="vertical">
 
             <ImageView
-                android:layout_width="80dp"
-                android:layout_height="80dp"
+                android:layout_width="96dp"
+                android:layout_height="96dp"
                 android:contentDescription="Logo"
-                android:src="@drawable/ic_book"
-                app:tint="@color/accent" />
+                android:src="@drawable/ic_library_logo" />
 
             <TextView
                 android:layout_width="wrap_content"

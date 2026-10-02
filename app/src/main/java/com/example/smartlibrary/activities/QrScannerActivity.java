@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat;
 
 import com.example.smartlibrary.database.DatabaseHelper;
 import com.example.smartlibrary.databinding.ActivityQrScannerBinding;
+import com.example.smartlibrary.models.Book;
 import com.example.smartlibrary.models.BookRequest;
 import com.example.smartlibrary.models.IssuedBook;
 import com.google.zxing.ResultPoint;
@@ -81,57 +82,84 @@ public class QrScannerActivity extends AppCompatActivity {
 
     private void processScannedQrToken(String rawText) {
         try {
+            if (rawText == null || rawText.trim().isEmpty()) {
+                Toast.makeText(this, "Empty QR code content.", Toast.LENGTH_SHORT).show();
+                finish();
+                return;
+            }
+
             String requestId = "";
             String bookId = "";
-            String userId = "";
+            String isbn = "";
 
             if (rawText.startsWith("{")) {
                 JSONObject json = new JSONObject(rawText);
                 requestId = json.optString("requestId");
                 bookId = json.optString("bookId");
-                userId = json.optString("userId");
+                isbn = json.optString("isbn");
+                if (bookId.isEmpty()) bookId = json.optString("id");
             } else if (rawText.contains(":")) {
                 String[] parts = rawText.split(":");
                 if (parts.length >= 3) {
                     requestId = parts[0];
                     bookId = parts[1];
-                    userId = parts[2];
                 }
+            } else {
+                bookId = rawText.trim();
             }
 
-            if (requestId.isEmpty()) {
-                Toast.makeText(this, "Invalid QR Code payload.", Toast.LENGTH_LONG).show();
+            // First: check if this is a direct Book QR code or ISBN
+            Book book = null;
+            if (!bookId.isEmpty()) {
+                book = dbHelper.findBookByCode(bookId);
+            }
+            if (book == null && !isbn.isEmpty()) {
+                book = dbHelper.findBookByCode(isbn);
+            }
+            if (book == null && !rawText.startsWith("{")) {
+                book = dbHelper.findBookByCode(rawText);
+            }
+
+            if (book != null) {
+                Toast.makeText(this, "Book Found: " + book.getTitle(), Toast.LENGTH_SHORT).show();
+                android.content.Intent intent = new android.content.Intent(this, BookDetailActivity.class);
+                intent.putExtra(BookDetailActivity.EXTRA_BOOK_ID, book.getBookId());
+                startActivity(intent);
                 finish();
                 return;
             }
 
-            BookRequest request = dbHelper.getRequestById(requestId);
-            if (request != null && "APPROVED".equalsIgnoreCase(request.getStatus())) {
-                IssuedBook issuedBook = new IssuedBook();
-                issuedBook.setIssuedBookId("ISS_" + System.currentTimeMillis());
-                issuedBook.setUserId(request.getUserId());
-                issuedBook.setBookId(request.getBookId());
-                issuedBook.setRequestId(request.getRequestId());
-                issuedBook.setBookTitle(request.getBookTitle());
-                issuedBook.setBookAuthor(request.getBookAuthor());
-                issuedBook.setBookCoverImage(request.getBookCoverImage());
-                issuedBook.setIssueDate(System.currentTimeMillis());
-                issuedBook.setDueDate(System.currentTimeMillis() + (14L * 24 * 3600 * 1000));
-                issuedBook.setStatus("ISSUED");
+            // Second: check if this is a Book Request QR pass for library issuing
+            if (!requestId.isEmpty()) {
+                BookRequest request = dbHelper.getRequestById(requestId);
+                if (request != null && "APPROVED".equalsIgnoreCase(request.getStatus())) {
+                    IssuedBook issuedBook = new IssuedBook();
+                    issuedBook.setIssuedBookId("ISS_" + System.currentTimeMillis());
+                    issuedBook.setUserId(request.getUserId());
+                    issuedBook.setBookId(request.getBookId());
+                    issuedBook.setRequestId(request.getRequestId());
+                    issuedBook.setBookTitle(request.getBookTitle());
+                    issuedBook.setBookAuthor(request.getBookAuthor());
+                    issuedBook.setBookCoverImage(request.getBookCoverImage());
+                    issuedBook.setIssueDate(System.currentTimeMillis());
+                    issuedBook.setDueDate(System.currentTimeMillis() + (14L * 24 * 3600 * 1000));
+                    issuedBook.setStatus("ISSUED");
 
-                dbHelper.issueBookToUser(issuedBook);
-                dbHelper.updateRequestStatus(requestId, "COMPLETED", null, 0, 0);
+                    dbHelper.issueBookToUser(issuedBook);
+                    dbHelper.updateRequestStatus(requestId, "COMPLETED", null, 0, 0);
 
-                Toast.makeText(this, "Book Successfully Issued: " + request.getBookTitle(), Toast.LENGTH_LONG).show();
-                finish();
-            } else {
-                Toast.makeText(this, "QR pass is expired, invalid, or already used.", Toast.LENGTH_LONG).show();
-                finish();
+                    Toast.makeText(this, "Book Successfully Issued: " + request.getBookTitle(), Toast.LENGTH_LONG).show();
+                    finish();
+                    return;
+                }
             }
+
+            Toast.makeText(this, "No book or valid request pass found for scanned QR code.", Toast.LENGTH_LONG).show();
+            finish();
 
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(this, "Error processing QR pass: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Error processing QR code: " + e.getMessage(), Toast.LENGTH_LONG).show();
             finish();
         }
     }

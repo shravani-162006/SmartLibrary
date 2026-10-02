@@ -1,6 +1,7 @@
 package com.example.smartlibrary.fragments;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -10,17 +11,25 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.bumptech.glide.Glide;
+import com.example.smartlibrary.R;
 import com.example.smartlibrary.activities.EditProfileActivity;
 import com.example.smartlibrary.activities.ForgotPasswordActivity;
 import com.example.smartlibrary.activities.MainActivity;
+import com.example.smartlibrary.database.DatabaseHelper;
 import com.example.smartlibrary.databinding.FragmentProfileBinding;
+import com.example.smartlibrary.models.IssuedBook;
 import com.example.smartlibrary.models.User;
 import com.example.smartlibrary.utils.SessionManager;
+
+import java.util.List;
+import java.util.Locale;
 
 public class ProfileFragment extends Fragment {
 
     private FragmentProfileBinding binding;
     private SessionManager sessionManager;
+    private DatabaseHelper dbHelper;
 
     @Nullable
     @Override
@@ -34,6 +43,7 @@ public class ProfileFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         sessionManager = new SessionManager(requireContext());
+        dbHelper = DatabaseHelper.getInstance(requireContext());
 
         displayUserProfile();
 
@@ -58,8 +68,45 @@ public class ProfileFragment extends Fragment {
             binding.tvProfileName.setText(user.getName());
             binding.tvProfileEmail.setText(user.getEmail());
             binding.tvProfileRoll.setText("Roll: " + user.getRollNumber());
-            binding.tvProfilePhone.setText("Phone: " + user.getMobile());
-            binding.tvProfileRole.setText("Account Role: " + (user.getRole() != null ? user.getRole().toUpperCase() : "STUDENT"));
+            binding.tvProfilePhone.setText(user.getMobile());
+            binding.tvProfileRole.setText(user.getRole() != null ? user.getRole().toUpperCase() + " MEMBER" : "STUDENT MEMBER");
+
+            // Profile photo rendering
+            if (user.getProfileImage() != null && !user.getProfileImage().trim().isEmpty()) {
+                Glide.with(this)
+                        .load(Uri.parse(user.getProfileImage()))
+                        .placeholder(R.drawable.ic_profile)
+                        .error(R.drawable.ic_profile)
+                        .into(binding.imgProfileAvatar);
+            } else {
+                binding.imgProfileAvatar.setImageResource(R.drawable.ic_profile);
+            }
+
+            // Expanded Account & Membership Details
+            binding.tvProfileDepartment.setText("Computer Science & Engineering");
+            binding.tvProfileMembershipStatus.setText("Active Smart Pass");
+            binding.tvProfileBorrowLimit.setText("5 Books Max Limit");
+
+            // Query DB for live stats
+            List<IssuedBook> activeLoans = dbHelper.getActiveIssuedBooks(user.getUserId());
+            binding.tvProfileActiveLoans.setText(activeLoans.size() + " Book(s) Borrowed");
+
+            double totalFine = 0.0;
+            for (IssuedBook b : activeLoans) {
+                if (System.currentTimeMillis() > b.getDueDate()) {
+                    long diff = System.currentTimeMillis() - b.getDueDate();
+                    long overdueDays = (diff / (1000 * 60 * 60 * 24)) + 1;
+                    totalFine += overdueDays * 1.50;
+                }
+            }
+
+            if (totalFine > 0) {
+                binding.tvProfileFineStanding.setText(String.format(Locale.getDefault(), "$%.2f (Overdue Fine Pending)", totalFine));
+                binding.tvProfileFineStanding.setTextColor(requireContext().getColor(R.color.danger));
+            } else {
+                binding.tvProfileFineStanding.setText("$0.00 (Clean Standing)");
+                binding.tvProfileFineStanding.setTextColor(requireContext().getColor(R.color.success));
+            }
         }
     }
 

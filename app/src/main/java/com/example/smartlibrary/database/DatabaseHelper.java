@@ -368,6 +368,23 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return null;
     }
 
+    public Book findBookByCode(String code) {
+        if (code == null || code.trim().isEmpty()) return null;
+        String trimmed = code.trim();
+        Book book = getBookById(trimmed);
+        if (book != null) return book;
+
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_BOOKS + " WHERE isbn=? OR title LIKE ?", new String[]{trimmed, "%" + trimmed + "%"});
+        if (cursor != null && cursor.moveToFirst()) {
+            book = cursorToBook(cursor);
+            cursor.close();
+            return book;
+        }
+        if (cursor != null) cursor.close();
+        return null;
+    }
+
     public List<Book> searchBooks(String query, String category) {
         List<Book> list = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();

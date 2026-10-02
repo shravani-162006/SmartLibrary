@@ -20,11 +20,10 @@
             android:orientation="vertical">
 
             <ImageView
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:contentDescription="Library Icon"
-                android:src="@drawable/ic_book"
-                app:tint="@color/accent" />
+                android:layout_width="84dp"
+                android:layout_height="84dp"
+                android:contentDescription="Library Logo"
+                android:src="@drawable/ic_library_logo" />
 
             <TextView
                 android:layout_width="wrap_content"
