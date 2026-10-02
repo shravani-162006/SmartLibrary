@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="176dp"
+    android:background="@color/primary_dark"
+    android:gravity="bottom"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:theme="@style/ThemeOverlay.AppCompat.Dark">
+
+    <com.google.android.material.imageview.ShapeableImageView
+        android:id="@+id/imgNavProfile"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:contentDescription="Profile Image"
+        android:padding="2dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/ic_profile"
+        app:cornerSize="50%"
+        app:strokeColor="@color/accent"
+        app:strokeWidth="2dp" />
+
+    <TextView
+        android:id="@+id/tvNavName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Smart User"
+        android:textAppearance="@style/TextAppearance.MaterialComponents.Headline6"
+        android:textColor="@color/white"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvNavEmail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="user@smartlibrary.edu"
+        android:textAppearance="@style/TextAppearance.MaterialComponents.Body2"
+        android:textColor="#CBD5E1" />
+
+    <TextView
+        android:id="@+id/tvNavRollNo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Roll No: LIB-2026-001"
+        android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+        android:textColor="@color/accent" />
+
+</LinearLayout>
